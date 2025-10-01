@@ -7,10 +7,15 @@ namespace RLGC {
 	class AdvancedObs : public ObsBuilder {
 	public:
 
-		constexpr static float
-			POS_COEF = 1 / 5000.f,
-			VEL_COEF = 1 / 2300.f,
-			ANG_VEL_COEF = 1 / 3.f;
+		float posCoef, velCoef, angVelCoef;
+		
+		AdvancedObs(
+			float posCoef = 1 / 5000.f,
+			float velCoef = 1 / 2300.f,
+			float angVelCoef = 1 / 3.f
+		) : posCoef(posCoef), velCoef(velCoef), angVelCoef(angVelCoef) {
+
+		}
 
 		virtual void AddPlayerToObs(FList& obs, const Player& player, bool inv, const PhysState& ball);
 
