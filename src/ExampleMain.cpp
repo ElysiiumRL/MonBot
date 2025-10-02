@@ -19,24 +19,28 @@ EnvCreateResult EnvCreateFunc(int index) {
 	std::vector<WeightedReward> rewards = {
 
 		// Movement
-		{ new AirReward(), 0.25f },
+		{ new AirReward(), 0.1f },
 
 		// Player-ball
 		{ new FaceBallReward(), 0.25f },
 		{ new VelocityPlayerToBallReward(), 4.f },
 		{ new StrongTouchReward(20, 100), 60 },
+		{ new TouchBallReward(), 2.0f },
 
 		// Ball-goal
 		{ new ZeroSumReward(new VelocityBallToGoalReward(), 1), 2.0f },
 
 		// Boost
 		{ new PickupBoostReward(), 10.f },
-		{ new SaveBoostReward(), 0.2f },
+		{ new SaveBoostReward(), 0.5f },
+
+	    { new SaveReward(), 100 },
+
 
 		// Game events
 		{ new ZeroSumReward(new BumpReward(), 0.5f), 20 },
 		{ new ZeroSumReward(new DemoReward(), 0.5f), 80 },
-		{ new GoalReward(), 150 }
+		{ new GoalReward(), 200 }
 	};
 
 	std::vector<TerminalCondition*> terminalConditions = {
@@ -96,31 +100,31 @@ void StepCallback(Learner* learner, const std::vector<GameState>& states, Report
 int main(int argc, char* argv[]) {
 	// Initialize RocketSim with collision meshes
 	// Change this path to point to your meshes!
-	RocketSim::Init("C:\\Users\\admin\\source\\repos\\RLArenaCollisionDumper\\collision_meshes");
+	RocketSim::Init("C:\\Users\\Administrator\\Desktop\\bot\\collision_meshes");
 
 	// Make configuration for the learner
 	LearnerConfig cfg = {};
 
 	cfg.deviceType = LearnerDeviceType::GPU_CUDA;
 
-	cfg.tickSkip = 8;
+	cfg.tickSkip = 4;
 	cfg.actionDelay = cfg.tickSkip - 1; // Normal value in other RLGym frameworks
 
 	// Play around with this to see what the optimal is for your machine, more games will consume more RAM
-	cfg.numGames = 256;
+	cfg.numGames = 1300;
 
 	// Leave this empty to use a random seed each run
 	// The random seed can have a strong effect on the outcome of a run
 	cfg.randomSeed = 123;
 
-	int tsPerItr = 50'000;
+	int tsPerItr = 200'000;
 	cfg.ppo.tsPerItr = tsPerItr;
 	cfg.ppo.batchSize = tsPerItr;
 	cfg.ppo.miniBatchSize = 50'000; // Lower this if too much VRAM is being allocated
 
 	// Using 2 epochs seems pretty optimal when comparing time training to skill
 	// Perhaps 1 or 3 is better for you, test and find out!
-	cfg.ppo.epochs = 1;
+	cfg.ppo.epochs = 2;
 
 	// This scales differently than "ent_coef" in other frameworks
 	// This is the scale for normalized entropy, which means you won't have to change it if you add more actions
@@ -131,12 +135,12 @@ int main(int argc, char* argv[]) {
 	cfg.ppo.gaeGamma = 0.99;
 
 	// Good learning rate to start
-	cfg.ppo.policyLR = 1.5e-4;
-	cfg.ppo.criticLR = 1.5e-4;
+	cfg.ppo.policyLR = 1e-4;
+	cfg.ppo.criticLR = 1e-4;
 
-	cfg.ppo.sharedHead.layerSizes = { 256, 256 };
-	cfg.ppo.policy.layerSizes = { 256, 256, 256 };
-	cfg.ppo.critic.layerSizes = { 256, 256, 256 };
+	cfg.ppo.sharedHead.layerSizes = { 256, 256, };
+	cfg.ppo.policy.layerSizes = { 256, 256, };
+	cfg.ppo.critic.layerSizes = { 256, 256, };
 
 	auto optim = ModelOptimType::ADAM;
 	cfg.ppo.policy.optimType = optim;
