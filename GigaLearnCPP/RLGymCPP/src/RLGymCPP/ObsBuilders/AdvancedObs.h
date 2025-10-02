@@ -1,19 +1,26 @@
 #pragma once
-
-#include "ObsBuilder.h"
+#include <RLGymCPP/ObsBuilders/ObsBuilder.h>
+#include <RLGymCPP/Gamestates/GameState.h>
+#include <RLGymCPP/Gamestates/Player.h>
+#include <RLGymCPP/Gamestates/StateUtil.h>
+#include <cmath>
 
 namespace RLGC {
-	// NOTE: This not based off of AdvancedObs in Python RLGym, and is specific to GigaLearn
-	class AdvancedObs : public ObsBuilder {
-	public:
+    class AdvancedObs : public ObsBuilder {
+    public:
+        int teamSize;
+        float POS_STD, ANG_STD;
+        bool expanding;
 
-		constexpr static float
-			POS_COEF = 1 / 5000.f,
-			VEL_COEF = 1 / 2300.f,
-			ANG_VEL_COEF = 1 / 3.f;
+        AdvancedObs(int teamSize = 3, bool expanding = false);
 
-		virtual void AddPlayerToObs(FList& obs, const Player& player, bool inv, const PhysState& ball);
+        // This signature matches the GigaLearn ObsBuilder interface
+        virtual FList BuildObs(const Player& player, const GameState& state) override;
 
-		virtual FList BuildObs(const Player& player, const GameState& state) override;
-	};
+    private:
+        void AddDummy(FList& obs);
+
+        // Helper function signature corrected to match the implementation
+        PhysState AddPlayerToObs(FList& obs, const Player& player, const PhysState& ball, bool inv);
+    };
 }
