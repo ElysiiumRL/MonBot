@@ -1,66 +1,117 @@
 #include "AdvancedObs.h"
 #include <RLGymCPP/Gamestates/StateUtil.h>
+#include <vector>
 
-void RLGC::AdvancedObs::AddPlayerToObs(FList& obs, const Player& player, bool inv, const PhysState& ball) {
-	auto phys = InvertPhys(player, inv);
+namespace RLGC {
 
-	obs += phys.pos * POS_COEF;
-	obs += phys.rotMat.forward;
-	obs += phys.rotMat.up;
-	obs += phys.vel * VEL_COEF;
-	obs += phys.angVel * ANG_VEL_COEF;
-	obs += phys.rotMat.Dot(phys.angVel) * ANG_VEL_COEF; // Local ang vel
+    AdvancedObs::AdvancedObs(int teamSize, bool expanding)
+        : teamSize(teamSize), POS_STD(2300.0f), ANG_STD((float)M_PI), expanding(expanding) {
+    }
 
-	// Local ball pos and vel
-	obs += phys.rotMat.Dot(ball.pos - phys.pos) * POS_COEF;
-	obs += phys.rotMat.Dot(ball.vel - phys.vel) * VEL_COEF;
+    FList AdvancedObs::BuildObs(const Player& player, const GameState& state) {
+        FList obs;
+        obs.reserve(237); // Reserve space for 3v3
 
-	obs += player.boost / 100;
-	obs += player.isOnGround;
-	obs += player.HasFlipOrJump();
-	obs += player.isDemoed;
-	obs += player.hasJumped; // Allows detecting flip resets
-}
+        bool inverted = (player.team == Team::ORANGE);
 
-RLGC::FList RLGC::AdvancedObs::BuildObs(const Player& player, const GameState& state) {
-	FList obs = {};
+        // Use the InvertPhys helper, just like in DefaultObs
+        PhysState ball = InvertPhys(state.ball, inverted);
+        const auto& pads = state.GetBoostPads(inverted);
 
-	bool inv = player.team == Team::ORANGE;
+        // 1. Ball data
+        obs += ball.pos / POS_STD;
+        obs += ball.vel / POS_STD;
+        obs += ball.angVel / ANG_STD;
 
-	auto ball = InvertPhys(state.ball, inv);
-	auto& pads = state.GetBoostPads(inv);
-	auto& padTimers = state.GetBoostPadTimers(inv);
+        // 2. Previous action from the Player object
+        for (int i = 0; i < Action::ELEM_AMOUNT; i++) {
+            obs += player.prevAction[i];
+        }
 
-	obs += ball.pos * POS_COEF;
-	obs += ball.vel * VEL_COEF;
-	obs += ball.angVel * ANG_VEL_COEF;
+        // 3. Boost pad states
+        for (int i = 0; i < CommonValues::BOOST_LOCATIONS_AMOUNT; i++) {
+            obs += (float)pads[i];
+        }
 
-	for (int i = 0; i < player.prevAction.ELEM_AMOUNT; i++)
-		obs += player.prevAction[i];
+        // 4. This player's data
+        PhysState playerCar = AddPlayerToObs(obs, player, ball, inverted);
 
-	for (int i = 0; i < CommonValues::BOOST_LOCATIONS_AMOUNT; i++) {
-		// A clever trick that blends the boost pads using their timers
-		if (pads[i]) {
-			obs += 1.f; // Pad is already available
-		} else {
-			obs += 1.f / (1.f + padTimers[i]); // Approaches 1 as the pad becomes available
-		}
-	}
+        // 5. Allies and enemies, using the DefaultObs pattern
+        std::vector<const Player*> allies;
+        std::vector<const Player*> enemies;
+        for (const auto& other : state.players) {
+            if (other.carId == player.carId) continue;
+            (other.team == player.team ? allies : enemies).push_back(&other);
+        }
 
-	AddPlayerToObs(obs, player, inv, ball);
-	FList teammates = {}, opponents = {};
+        // 6. Add allies with padding
+        int allyCount = 0;
+        for (const auto* ally : allies) {
+            if (allyCount >= teamSize - 1) break;
+            PhysState otherCar = AddPlayerToObs(obs, *ally, ball, inverted);
+            obs += (otherCar.pos - playerCar.pos) / POS_STD;
+            obs += (otherCar.vel - playerCar.vel) / POS_STD;
+            allyCount++;
+        }
+        while (allyCount < teamSize - 1) {
+            AddDummy(obs);
+            allyCount++;
+        }
 
-	for (auto& otherPlayer : state.players) {
-		if (otherPlayer.carId == player.carId)
-			continue;
+        // 7. Add enemies with padding
+        int enemyCount = 0;
+        for (const auto* enemy : enemies) {
+            if (enemyCount >= teamSize) break;
+            PhysState otherCar = AddPlayerToObs(obs, *enemy, ball, inverted);
+            obs += (otherCar.pos - playerCar.pos) / POS_STD;
+            obs += (otherCar.vel - playerCar.vel) / POS_STD;
+            enemyCount++;
+        }
+        while (enemyCount < teamSize) {
+            AddDummy(obs);
+            enemyCount++;
+        }
 
-		AddPlayerToObs(
-			(otherPlayer.team == player.team) ? teammates : opponents,
-			otherPlayer, inv, ball
-		);
-	}
+        return obs;
+    }
 
-	obs += teammates;
-	obs += opponents;
-	return obs;
-}
+    // Dummy now adds 32 floats: 26 for player data + 6 for relative data
+    void AdvancedObs::AddDummy(FList& obs) {
+        // 26 floats for base player data
+        for (int i = 0; i < 7; i++) obs += {0, 0, 0};
+        obs += {0, 0, 0, 0, 0};
+
+        // 6 floats for extra relative data
+        obs += {0, 0, 0};
+        obs += {0, 0, 0};
+    }
+
+    // Helper function now correctly converted
+    PhysState AdvancedObs::AddPlayerToObs(FList& obs, const Player& player, const PhysState& ball, bool inv) {
+        PhysState playerCar = InvertPhys(player, inv);
+
+        Vec relPos = ball.pos - playerCar.pos;
+        Vec relVel = ball.vel - playerCar.vel;
+
+        // Player physics data (21 floats)
+        obs += relPos / POS_STD;
+        obs += relVel / POS_STD;
+        obs += playerCar.pos / POS_STD;
+        obs += playerCar.rotMat.forward;
+        obs += playerCar.rotMat.up;
+        obs += playerCar.vel / POS_STD;
+        obs += playerCar.angVel / ANG_STD;
+
+        // Player state data (5 floats), using the correct GigaLearn API
+        obs += FList{
+            player.boost / 100.f,
+            (float)player.isOnGround,
+            (float)player.HasFlipOrJump(), // **FIX:** Use HasFlipOrJump() instead of hasFlip/hasJump
+            (float)player.isDemoed,
+            0.f // Placeholder for the removed `hasJump` to maintain size 26
+        };
+
+        return playerCar;
+    }
+
+} // namespace RLGC
