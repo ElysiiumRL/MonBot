@@ -2,6 +2,7 @@
 
 #include <RLGymCPP/Rewards/CommonRewards.h>
 #include <RLGymCPP/Rewards/ZeroSumReward.h>
+#include <RLGymCPP/Rewards/EnergyReward.h>
 #include <RLGymCPP/TerminalConditions/NoTouchCondition.h>
 #include <RLGymCPP/TerminalConditions/GoalScoreCondition.h>
 #include <RLGymCPP/OBSBuilders/DefaultObs.h>
@@ -15,32 +16,30 @@ using namespace RLGC; // RLGymCPP
 
 // Create the RLGymCPP environment for each of our games
 EnvCreateResult EnvCreateFunc(int index) {
-	// These are ok rewards that will produce a scoring bot in ~100m steps
+	// Configuration ultra-optimisée pour 1v1, inspirée par des bots de haut niveau
 	std::vector<WeightedReward> rewards = {
 
 		// Movement
 		{ new AirReward(), 0.1f },
+		{ new EnergyReward(), .005f },
 
 		// Player-ball
-		{ new FaceBallReward(), 0.25f },
+		{ new FaceBallReward(), 0.3f },
 		{ new VelocityPlayerToBallReward(), 4.f },
 		{ new StrongTouchReward(20, 100), 60 },
-		{ new TouchBallReward(), 2.0f },
 
 		// Ball-goal
 		{ new ZeroSumReward(new VelocityBallToGoalReward(), 1), 2.0f },
 
 		// Boost
 		{ new PickupBoostReward(), 10.f },
-		{ new SaveBoostReward(), 0.5f },
-
-	    { new SaveReward(), 100 },
-
+		{ new SaveBoostReward(), 1.f },
 
 		// Game events
-		{ new ZeroSumReward(new BumpReward(), 0.5f), 20 },
-		{ new ZeroSumReward(new DemoReward(), 0.5f), 80 },
-		{ new GoalReward(), 200 }
+		{ new ZeroSumReward(new BumpReward(), 0.5f), 40 },
+		{ new ZeroSumReward(new DemoReward(), 0.5f), 90 },
+		{ new GoalReward(), 300 },
+		{ new SaveReward(), 150 }
 	};
 
 	std::vector<TerminalCondition*> terminalConditions = {
@@ -107,11 +106,11 @@ int main(int argc, char* argv[]) {
 
 	cfg.deviceType = LearnerDeviceType::GPU_CUDA;
 
-	cfg.tickSkip = 4;
+	cfg.tickSkip = 8;
 	cfg.actionDelay = cfg.tickSkip - 1; // Normal value in other RLGym frameworks
 
 	// Play around with this to see what the optimal is for your machine, more games will consume more RAM
-	cfg.numGames = 1300;
+	cfg.numGames = 500;
 
 	// Leave this empty to use a random seed each run
 	// The random seed can have a strong effect on the outcome of a run
@@ -120,11 +119,11 @@ int main(int argc, char* argv[]) {
 	int tsPerItr = 200'000;
 	cfg.ppo.tsPerItr = tsPerItr;
 	cfg.ppo.batchSize = tsPerItr;
-	cfg.ppo.miniBatchSize = 50'000; // Lower this if too much VRAM is being allocated
+	cfg.ppo.miniBatchSize = 100'000; // Lower this if too much VRAM is being allocated
 
 	// Using 2 epochs seems pretty optimal when comparing time training to skill
 	// Perhaps 1 or 3 is better for you, test and find out!
-	cfg.ppo.epochs = 2;
+	cfg.ppo.epochs = 1;
 
 	// This scales differently than "ent_coef" in other frameworks
 	// This is the scale for normalized entropy, which means you won't have to change it if you add more actions
@@ -138,9 +137,9 @@ int main(int argc, char* argv[]) {
 	cfg.ppo.policyLR = 1e-4;
 	cfg.ppo.criticLR = 1e-4;
 
-	cfg.ppo.sharedHead.layerSizes = { 256, 256, };
-	cfg.ppo.policy.layerSizes = { 256, 256, };
-	cfg.ppo.critic.layerSizes = { 256, 256, };
+	cfg.ppo.sharedHead.layerSizes = { 256, 256, 256, 256, 256, 256 };
+	cfg.ppo.policy.layerSizes = { 256, 256, 256, 256, 256, 256 };
+	cfg.ppo.critic.layerSizes = { 256, 256, 256, 256, 256, 256 };
 
 	auto optim = ModelOptimType::ADAM;
 	cfg.ppo.policy.optimType = optim;
@@ -157,7 +156,7 @@ int main(int argc, char* argv[]) {
 	cfg.ppo.critic.addLayerNorm = addLayerNorm;
 	cfg.ppo.sharedHead.addLayerNorm = addLayerNorm;
 
-	cfg.sendMetrics = true; // Send metrics
+	cfg.sendMetrics = false; // Send metrics
 	cfg.renderMode = false; // Don't render
 
 	// Make the learner with the environment creation function and the config we just made
