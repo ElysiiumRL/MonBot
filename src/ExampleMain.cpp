@@ -3,10 +3,11 @@
 #include <RLGymCPP/Rewards/CommonRewards.h>
 #include <RLGymCPP/Rewards/ZeroSumReward.h>
 #include <RLGymCPP/Rewards/EnergyReward.h>
+#include <RLGymCPP/Rewards/FlickReward.h>
 #include <RLGymCPP/TerminalConditions/NoTouchCondition.h>
 #include <RLGymCPP/TerminalConditions/GoalScoreCondition.h>
-#include <RLGymCPP/OBSBuilders/DefaultObs.h>
-#include <RLGymCPP/OBSBuilders/AdvancedObs.h>
+#include <RLGymCPP/ObsBuilders/DefaultObs.h>
+#include <RLGymCPP/ObsBuilders/AdvancedObs.h>
 #include <RLGymCPP/StateSetters/KickoffState.h>
 #include <RLGymCPP/StateSetters/RandomState.h>
 #include <RLGymCPP/ActionParsers/DefaultAction.h>
@@ -19,27 +20,22 @@ EnvCreateResult EnvCreateFunc(int index) {
 	// Configuration ultra-optimisée pour 1v1, inspirée par des bots de haut niveau
 	std::vector<WeightedReward> rewards = {
 
-		// Movement
-		{ new AirReward(), 0.1f },
-		{ new EnergyReward(), .005f },
-
-		// Player-ball
-		{ new FaceBallReward(), 0.3f },
-		{ new VelocityPlayerToBallReward(), 4.f },
-		{ new StrongTouchReward(20, 100), 60 },
-
-		// Ball-goal
-		{ new ZeroSumReward(new VelocityBallToGoalReward(), 1), 2.0f },
-
-		// Boost
-		{ new PickupBoostReward(), 10.f },
-		{ new SaveBoostReward(), 1.f },
-
-		// Game events
-		{ new ZeroSumReward(new BumpReward(), 0.5f), 40 },
-		{ new ZeroSumReward(new DemoReward(), 0.5f), 90 },
-		{ new GoalReward(), 300 },
-		{ new SaveReward(), 150 }
+        { new EnergyReward(), .010f },
+        { new SpeedReward(), 3.f },
+        { new FlickReward(), 3.f },
+        { new WavedashReward(), 3.f },
+		{ new TouchBallReward(), 3.f },
+        { new StrongTouchReward(40, 120), 1.f },
+        { new VelocityPlayerToBallReward(), 4.f },
+        { new FaceBallReward(), 2.f },
+        { new AirReward(), 0.1f },
+        { new PickupBoostReward(), 25.f },
+        { new SaveBoostReward(), 0.5f },
+        { new ZeroSumReward(new BumpReward(), 0.5f, 0.5f), 50 },
+        { new ZeroSumReward(new DemoReward(), 0.5f, 0.5f), 90 },
+        { new GoalReward(-0.90f), 500 },
+        { new ZeroSumReward(new VelocityBallToGoalReward(), 1), 15.0f },
+        { new SaveReward(), 300 },
 	};
 
 	std::vector<TerminalCondition*> terminalConditions = {
@@ -99,7 +95,7 @@ void StepCallback(Learner* learner, const std::vector<GameState>& states, Report
 int main(int argc, char* argv[]) {
 	// Initialize RocketSim with collision meshes
 	// Change this path to point to your meshes!
-	RocketSim::Init("C:\\Users\\Administrator\\Desktop\\bot\\collision_meshes");
+	RocketSim::Init("/workspace/MonBot/collision_meshes");
 
 	// Make configuration for the learner
 	LearnerConfig cfg = {};
@@ -119,7 +115,7 @@ int main(int argc, char* argv[]) {
 	int tsPerItr = 200'000;
 	cfg.ppo.tsPerItr = tsPerItr;
 	cfg.ppo.batchSize = tsPerItr;
-	cfg.ppo.miniBatchSize = 100'000; // Lower this if too much VRAM is being allocated
+	cfg.ppo.miniBatchSize = 50'000; // Lower this if too much VRAM is being allocated
 
 	// Using 2 epochs seems pretty optimal when comparing time training to skill
 	// Perhaps 1 or 3 is better for you, test and find out!
@@ -131,15 +127,15 @@ int main(int argc, char* argv[]) {
 
 	// Rate of reward decay
 	// Starting low tends to work out
-	cfg.ppo.gaeGamma = 0.99;
+	cfg.ppo.gaeGamma = 0.992;
 
 	// Good learning rate to start
 	cfg.ppo.policyLR = 1e-4;
 	cfg.ppo.criticLR = 1e-4;
 
-	cfg.ppo.sharedHead.layerSizes = { 256, 256, 256, 256, 256, 256 };
-	cfg.ppo.policy.layerSizes = { 256, 256, 256, 256, 256, 256 };
-	cfg.ppo.critic.layerSizes = { 256, 256, 256, 256, 256, 256 };
+	cfg.ppo.sharedHead.layerSizes = { 1024, 1024, 1024 };
+	cfg.ppo.policy.layerSizes = { 1024, 1024, 1024 };
+	cfg.ppo.critic.layerSizes = { 1024, 1024 ,1024 };
 
 	auto optim = ModelOptimType::ADAM;
 	cfg.ppo.policy.optimType = optim;
