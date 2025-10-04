@@ -190,20 +190,27 @@ namespace GGL {
 				model->Load(folder, allowNotExist, loadOptims);
 		}
 
-		class ModelIterator : public std::iterator<std::forward_iterator_tag, typename Model*> {
-		public:
-			using MapItr = std::map<std::string, Model*>::iterator;
-			MapItr _mapItr;
+		class ModelIterator {
+public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = Model*;
+    using difference_type = std::ptrdiff_t;
+    using pointer = Model**;
+    using reference = Model*&;
 
-			ModelIterator(MapItr mapItr) : _mapItr(mapItr) {}
+    using MapItr = std::map<std::string, Model*>::iterator;
+    MapItr _mapItr;
 
-			ModelIterator& operator++() { ++_mapItr; return *this; }
+    ModelIterator(MapItr mapItr) : _mapItr(mapItr) {}
 
-			bool operator==(const ModelIterator& other) const { return _mapItr == other._mapItr; }
-			bool operator!=(const ModelIterator& other) const { return _mapItr != other._mapItr; }
+    ModelIterator& operator++() { ++_mapItr; return *this; }
+    ModelIterator operator++(int) { ModelIterator tmp = *this; ++(*this); return tmp; }
 
-			typename Model*& operator*() const { return _mapItr->second; }
-		};
+    bool operator==(const ModelIterator& other) const { return _mapItr == other._mapItr; }
+    bool operator!=(const ModelIterator& other) const { return _mapItr != other._mapItr; }
+
+    Model*& operator*() const { return _mapItr->second; }
+    Model** operator->() const { return &_mapItr->second; }
 
 		ModelIterator begin() {
 			return map.begin();
