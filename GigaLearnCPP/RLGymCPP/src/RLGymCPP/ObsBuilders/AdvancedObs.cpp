@@ -4,16 +4,16 @@
 void RLGC::AdvancedObs::AddPlayerToObs(FList& obs, const Player& player, bool inv, const PhysState& ball) {
 	auto phys = InvertPhys(player, inv);
 
-	obs += phys.pos * POS_COEF;
+	obs += phys.pos * posCoef;
 	obs += phys.rotMat.forward;
 	obs += phys.rotMat.up;
-	obs += phys.vel * VEL_COEF;
-	obs += phys.angVel * ANG_VEL_COEF;
-	obs += phys.rotMat.Dot(phys.angVel) * ANG_VEL_COEF; // Local ang vel
+	obs += phys.vel * velCoef;
+	obs += phys.angVel * angVelCoef;
+	obs += phys.rotMat.Dot(phys.angVel) * angVelCoef; // Local ang vel
 
 	// Local ball pos and vel
-	obs += phys.rotMat.Dot(ball.pos - phys.pos) * POS_COEF;
-	obs += phys.rotMat.Dot(ball.vel - phys.vel) * VEL_COEF;
+	obs += phys.rotMat.Dot(ball.pos - phys.pos) * posCoef;
+	obs += phys.rotMat.Dot(ball.vel - phys.vel) * velCoef;
 
 	obs += player.boost / 100;
 	obs += player.isOnGround;
@@ -31,9 +31,9 @@ RLGC::FList RLGC::AdvancedObs::BuildObs(const Player& player, const GameState& s
 	auto& pads = state.GetBoostPads(inv);
 	auto& padTimers = state.GetBoostPadTimers(inv);
 
-	obs += ball.pos * POS_COEF;
-	obs += ball.vel * VEL_COEF;
-	obs += ball.angVel * ANG_VEL_COEF;
+	obs += ball.pos * posCoef;
+	obs += ball.vel * velCoef;
+	obs += ball.angVel * angVelCoef;
 
 	for (int i = 0; i < player.prevAction.ELEM_AMOUNT; i++)
 		obs += player.prevAction[i];
