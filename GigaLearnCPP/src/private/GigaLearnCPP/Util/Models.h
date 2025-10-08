@@ -16,6 +16,11 @@
 #include <GigaLearnCPP/PPO/PPOLearnerConfig.h>
 #include <GigaLearnCPP/Util/ModelConfig.h>
 
+#include <map>
+#include <string>
+#include <filesystem>
+#include <cctype>
+
 namespace GGL {
 
 	inline void AddActivationFunc(torch::nn::Sequential& seq, ModelActivationType type) {
@@ -52,7 +57,7 @@ namespace GGL {
 		}
 
 		RG_ERR_CLOSE("Unknown optimizer type: " << (int)type);
-		return NULL;
+		return nullptr;
 	}
 
 	inline void SetOptimizerLR(torch::optim::Optimizer* optimizer, ModelOptimType type, float lr) {
@@ -91,7 +96,7 @@ namespace GGL {
 
 		torch::optim::Optimizer* optim;
 
-		Model() : config(PartialModelConfig{}), device({}), modelName(NULL) {} // Uninitialized init
+		Model() : config(PartialModelConfig{}), device({}), modelName(nullptr) {} // Uninitialized init
 
 		Model(
 			const char* modelName,
@@ -100,7 +105,7 @@ namespace GGL {
 		);
 
 		virtual torch::Tensor Forward(torch::Tensor input, bool halfPrec);
-		
+
 		void SetOptimLR(float newLR);
 
 		void StepOptim();
@@ -160,12 +165,12 @@ namespace GGL {
 	public:
 		std::map<std::string, Model*> map = {};
 
-		Model* operator[](const std::string& name) { 
+		Model* operator[](const std::string& name) {
 			auto itr = map.find(name);
 			if (itr == map.end()) {
-				return NULL;
+				return nullptr;
 			} else {
-				return map[name];
+				return itr->second;
 			}
 		};
 
@@ -191,33 +196,33 @@ namespace GGL {
 		}
 
 		class ModelIterator {
-public:
-    using iterator_category = std::forward_iterator_tag;
-    using value_type = Model*;
-    using difference_type = std::ptrdiff_t;
-    using pointer = Model**;
-    using reference = Model*&;
+		public:
+			using iterator_category = std::forward_iterator_tag;
+			using value_type = Model*;
+			using difference_type = std::ptrdiff_t;
+			using pointer = Model**;
+			using reference = Model*&;
+			using MapItr = std::map<std::string, Model*>::iterator;
 
-    using MapItr = std::map<std::string, Model*>::iterator;
-    MapItr _mapItr;
+			MapItr _mapItr;
 
-    ModelIterator(MapItr mapItr) : _mapItr(mapItr) {}
+			ModelIterator(MapItr mapItr) : _mapItr(mapItr) {}
 
-    ModelIterator& operator++() { ++_mapItr; return *this; }
-    ModelIterator operator++(int) { ModelIterator tmp = *this; ++(*this); return tmp; }
+			ModelIterator& operator++() { ++_mapItr; return *this; }
 
-    bool operator==(const ModelIterator& other) const { return _mapItr == other._mapItr; }
-    bool operator!=(const ModelIterator& other) const { return _mapItr != other._mapItr; }
+			bool operator==(const ModelIterator& other) const { return _mapItr == other._mapItr; }
+			bool operator!=(const ModelIterator& other) const { return _mapItr != other._mapItr; }
 
-    Model*& operator*() const { return _mapItr->second; }
-    Model** operator->() const { return &_mapItr->second; }
+			reference operator*() const { return _mapItr->second; }
+			pointer operator->() const { return &(_mapItr->second); }
+		};
 
 		ModelIterator begin() {
-			return map.begin();
+			return ModelIterator(map.begin());
 		}
 
 		ModelIterator end() {
-			return map.end();
+			return ModelIterator(map.end());
 		}
 
 		ModelSet CloneAll() {
