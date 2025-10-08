@@ -1,29 +1,21 @@
 #pragma once
-#include "../BaseInc.h"
+#include "Framework.h"
 
-RS_NS_START
+namespace RLGC {
+	namespace Math {
+		Vec RandVec(Vec min, Vec max);
 
-struct LinearPieceCurve {
-	std::map<float, float> valueMappings;
+		constexpr float VelToKPH(float vel) {
+			return vel / (250.f / 9.f);
+		}
 
-	float GetOutput(float input, float defaultOutput = 1) const;
-};
+		constexpr float KPHToVel(float vel) {
+			return vel * (250.f / 9.f);
+		}
 
-namespace Math {
-	btVector3 RoundVec(btVector3 vec, float precision);
+		inline float cosine_similarity(const Vec& vec1, const Vec& vec2) {
+			return vec1.Dot(vec2) / (vec1.Length() * vec2.Length());
+		}
 
-	// NOTE: min is inclusive, max is exclusive
-	// Seed will be used if not -1
-	int RandInt(int min, int max, int seed = -1);
-
-	float RandFloat(float min = 0, float max = 1);
-
-	std::default_random_engine& GetRandEngine();
-
-	float WrapNormalizeFloat(float val, float minmax);
-
-	// Simulates aggressive UE3 rotator rounding when converting from a UE3 rotator to vector
-	Angle RoundAngleUE3(Angle ang);
+	}
 }
-
-RS_NS_END
