@@ -1,5 +1,5 @@
 #pragma once
-#include "../Framework.h"
+#include "RLGymCPP/Framework.h"
 
 namespace RLGC {
 	// https://github.com/AechPro/rocket-league-gym-sim/blob/main/rlgym_sim/utils/common_values.py
