@@ -4,12 +4,13 @@
 #include <RLGymCPP/Rewards/ZeroSumReward.h>
 #include <RLGymCPP/TerminalConditions/NoTouchCondition.h>
 #include <RLGymCPP/TerminalConditions/GoalScoreCondition.h>
-#include <RLGymCPP/ObsBuilders/DefaultObs.h>
-#include <RLGymCPP/ObsBuilders/AdvancedObs.h>
-#include <RLGymCPP/ObsBuilders/CustomObs.h>
+#include <RLGymCPP/OBSBuilders/DefaultObs.h>
+#include <RLGymCPP/OBSBuilders/AdvancedObs.h>
+#include <RLGymCPP/OBSBuilders/CustomOBS.h>
 #include <RLGymCPP/StateSetters/KickoffState.h>
 #include <RLGymCPP/StateSetters/RandomState.h>
 #include <RLGymCPP/StateSetters/CombinedState.h>
+#include <RLGymCPP/StateSetters/TeamSizeCombinedState.h>
 #include <RLGymCPP/ActionParsers/DefaultAction.h>
 
 using namespace GGL; // GigaLearn
@@ -20,26 +21,26 @@ EnvCreateResult EnvCreateFunc(int index) {
 	std::vector<WeightedReward> rewards = {
 
 		// Movement
-		{ new AirReward(), 0.05f },
+		{ new AirReward(), 0.15f },
 		{ new EnergyReward(), 0.02f },
-		{ new WavedashReward(), 9.f },
+		{ new WavedashReward(), 5.f },
 		{ new LowSpeedPunish(), 0.5f },
 
 		// Player-ball
-		{ new ZeroSumReward(new StrongTouchReward(20, 110), 1, 0.0f), 5 },
-                { new ZeroSumReward(new TouchAccelReward(), 1), 25 },
-		{ new ZeroSumReward(new TouchHeightReward(), 1), 20 },
-		{ new ZeroSumReward(new AerialReward2(), 1, 1), 10.f },
-		{ new ZeroSumReward(new PossessionReward(), 1, 1), 0.411f },
-                { new ZeroSumReward(new DribbleBumpReward(), 1), 600 },
-                { new ZeroSumReward(new DribbleReward(), 1), 0.9f },
+		{ new FaceBallReward(), 0.2f },
+		{ new VelocityPlayerToBallReward(), 3.f },
+		{ new ZeroSumReward(new StrongTouchReward(20, 110), 1, 0.0f), 50 },
+		{ new ZeroSumReward(new TouchHeightReward(), 1), 30 },
+		{ new ZeroSumReward(new AerialReward2(), 1, 1), 60.f },
+		{ new ZeroSumReward(new PossessionReward(), 1, 1), 0.3f },
+
 
 		// Ball-goal
-		{ new VelocityBallToGoalReward(), 1.75f },
+		{ new VelocityBallToGoalReward(), 2.f },
 		{ new GoalViewReward(), 2.5f },
 
 		// Boost
-		{ new ZeroSumReward(new PickupBoostReward(), 0.3f, 1), 45.f },
+		{ new ZeroSumReward(new PickupBoostReward(), 0.3f, 1), 40.f },
 		{ new ZeroSumReward(new SaveBoostReward(), 0, 0.25f), 0.2f },
 		
 		// Game Sense
@@ -48,15 +49,15 @@ EnvCreateResult EnvCreateFunc(int index) {
 		{ new AFKTrollPenalty(), 50.f },
 
 		// Game events
-		{ new ZeroSumReward(new BumpReward(), 0.5f), 250 },
-		{ new ZeroSumReward(new DemoReward(), 0.5f), 350 },
+		{ new ZeroSumReward(new BumpReward(), 0.5f), 200 },
+		{ new ZeroSumReward(new DemoReward(), 0.5f), 300 },
 		{ new ZeroSumReward(new ClosestKickoffReward(), 1, 1), 1.5f },
 		{ new ZeroSumReward(new AssistReward(), 1, 1), 180 },
 		{ new ZeroSumReward(new GoalSpeedReward(), 1, 0), 125 },
 		{ new GoalReward(), 300.f },
 		{ new GoalDistancePunish(), 250 },
 		{ new ZeroSumReward(new GoalHeightReward(), 1, 0), 125 },
-		{ new ZeroSumReward(new ShotPassReward(), 0, 1.f), 250 },
+		{ new ZeroSumReward(new ShotPassReward(), 0, 1.f), 125 },
 	};
 
 	std::vector<TerminalCondition*> terminalConditions = {
@@ -138,7 +139,7 @@ void StepCallback(Learner* learner, const std::vector<GameState>& states, Report
 int main(int argc, char* argv[]) {
 	// Initialize RocketSim with collision meshes
 	// Change this path to point to your meshes!
-	RocketSim::Init("/workspace/bot/collision_meshes");
+	RocketSim::Init("C:\\Users\\GCD02\\GigaLearnCPP-Leak\\out\\build\\RelWithDebInfo\\collision_meshes");
 
 	// Make configuration for the learner
 	LearnerConfig cfg = {};
@@ -149,13 +150,13 @@ int main(int argc, char* argv[]) {
 	cfg.actionDelay = cfg.tickSkip - 1; // Normal value in other RLGym frameworks
 
 	// Play around with this to see what the optimal is for your machine, more games will consume more RAM
-	cfg.numGames = 1000; //256 default
+	cfg.numGames = 500; //256 default
 
 	// Leave this empty to use a random seed each run
 	// The random seed can have a strong effect on the outcome of a run
 	cfg.randomSeed = 123;
 
-	int tsPerItr = 100'000;
+	int tsPerItr = 50'000;
 	cfg.ppo.tsPerItr = tsPerItr;
 	cfg.ppo.batchSize = tsPerItr;
 	cfg.ppo.miniBatchSize = 50'000; // Lower this if too much VRAM is being allocated
@@ -170,15 +171,15 @@ int main(int argc, char* argv[]) {
 
 	// Rate of reward decay
 	// Starting low tends to work out
-	cfg.ppo.gaeGamma = 0.995;
+	cfg.ppo.gaeGamma = 0.991;
 
 	// Good learning rate to start
 	cfg.ppo.policyLR = 1.5e-4;
 	cfg.ppo.criticLR = 1.5e-4;
 
-	cfg.ppo.sharedHead.layerSizes = { 1024, 1024 };
-	cfg.ppo.policy.layerSizes = { 1024, 1024, 512, 512 };
-	cfg.ppo.critic.layerSizes = { 1024, 1024, 512, 512 };
+	cfg.ppo.sharedHead.layerSizes = { 512, 512 };
+	cfg.ppo.policy.layerSizes = { 512, 512, 512, 512 };
+	cfg.ppo.critic.layerSizes = { 512, 512, 512, 512 };
 
 	auto optim = ModelOptimType::ADAM;
 	cfg.ppo.policy.optimType = optim;
