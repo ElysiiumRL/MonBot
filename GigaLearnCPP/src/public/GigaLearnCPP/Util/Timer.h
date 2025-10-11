@@ -1,6 +1,5 @@
 #pragma once
 #include "../Framework.h"
-#include <chrono>
 
 namespace GGL {
 	struct Timer {
@@ -12,13 +11,13 @@ namespace GGL {
 
 		// Returns elapsed time in seconds
 		double Elapsed() {
-			auto endTime = std::chrono::steady_clock::now();
+			auto endTime = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> elapsed = endTime - startTime;
 			return elapsed.count();
 		}
 
 		void Reset() {
-			startTime = std::chrono::steady_clock::now();
+			startTime = std::chrono::high_resolution_clock::now();
 		}
 	};
 }
