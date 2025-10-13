@@ -4,7 +4,7 @@
 
 namespace GGL {
 	struct SkillTrackerConfig {
-		bool enabled = false;
+		bool enabled = true;
 
 		// Number of arenas for evaluation
 		// Don't put this much higher than your CPU thread count
