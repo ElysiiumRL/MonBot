@@ -10,7 +10,6 @@
 #include <RLGymCPP/StateSetters/KickoffState.h>
 #include <RLGymCPP/StateSetters/RandomState.h>
 #include <RLGymCPP/StateSetters/CombinedState.h>
-#include <RLGymCPP/StateSetters/TeamSizeCombinedState.h>
 #include <RLGymCPP/ActionParsers/DefaultAction.h>
 
 using namespace GGL; // GigaLearn
@@ -21,17 +20,17 @@ EnvCreateResult EnvCreateFunc(int index) {
 	std::vector<WeightedReward> rewards = {
 
 		// Movement
-		{ new AirReward(), 0.15f },
-		{ new EnergyReward(), 0.02f },
-		{ new WavedashReward(), 5.f },
+		{ new AirReward(), 0.1f },
+		{ new EnergyReward(), 0.005f },
+		{ new WavedashReward(), 7.f },
 		{ new LowSpeedPunish(), 0.5f },
 
 		// Player-ball
 		{ new FaceBallReward(), 0.2f },
 		{ new VelocityPlayerToBallReward(), 3.f },
-		{ new ZeroSumReward(new StrongTouchReward(20, 110), 1, 0.0f), 50 },
+		{ new ZeroSumReward(new StrongTouchReward(20, 110), 1, 0.0f), 45 },
 		{ new ZeroSumReward(new TouchHeightReward(), 1), 30 },
-		{ new ZeroSumReward(new AerialReward2(), 1, 1), 60.f },
+		{ new ZeroSumReward(new AerialReward2(), 1, 1), 50.f },
 		{ new ZeroSumReward(new PossessionReward(), 1, 1), 0.3f },
 
 
@@ -42,7 +41,7 @@ EnvCreateResult EnvCreateFunc(int index) {
 		// Boost
 		{ new ZeroSumReward(new PickupBoostReward(), 0.3f, 1), 40.f },
 		{ new ZeroSumReward(new SaveBoostReward(), 0, 0.25f), 0.2f },
-		
+
 		// Game Sense
 		{ new EngagedDistanceReward(), 20.f },
 		{ new TeamSpacingReward(), 10.f },
@@ -77,7 +76,7 @@ EnvCreateResult EnvCreateFunc(int index) {
 		if (pattern < 6)
 			playersPerTeam = 1; // split so that 1s gives the same effective experience as 2s
 		else
-			playersPerTeam = 2;
+			playersPerTeam = 1;
 		}
 
 	//int playersPerTeam = 1; //index % 3 + 1;
@@ -139,7 +138,7 @@ void StepCallback(Learner* learner, const std::vector<GameState>& states, Report
 int main(int argc, char* argv[]) {
 	// Initialize RocketSim with collision meshes
 	// Change this path to point to your meshes!
-	RocketSim::Init("C:\\Users\\GCD02\\GigaLearnCPP-Leak\\out\\build\\RelWithDebInfo\\collision_meshes");
+	RocketSim::Init("C:\\Users\\Administrator\\Desktop\\bot\\GigaLearnCPP-Leak\\collision_meshes");
 
 	// Make configuration for the learner
 	LearnerConfig cfg = {};
@@ -156,7 +155,7 @@ int main(int argc, char* argv[]) {
 	// The random seed can have a strong effect on the outcome of a run
 	cfg.randomSeed = 123;
 
-	int tsPerItr = 50'000;
+	int tsPerItr = 100'000;
 	cfg.ppo.tsPerItr = tsPerItr;
 	cfg.ppo.batchSize = tsPerItr;
 	cfg.ppo.miniBatchSize = 50'000; // Lower this if too much VRAM is being allocated
@@ -174,12 +173,12 @@ int main(int argc, char* argv[]) {
 	cfg.ppo.gaeGamma = 0.991;
 
 	// Good learning rate to start
-	cfg.ppo.policyLR = 1.5e-4;
-	cfg.ppo.criticLR = 1.5e-4;
+	cfg.ppo.policyLR = 1e-4;
+	cfg.ppo.criticLR = 1e-4;
 
-	cfg.ppo.sharedHead.layerSizes = { 512, 512 };
-	cfg.ppo.policy.layerSizes = { 512, 512, 512, 512 };
-	cfg.ppo.critic.layerSizes = { 512, 512, 512, 512 };
+	cfg.ppo.sharedHead.layerSizes = { 512, 512, 512, };
+	cfg.ppo.policy.layerSizes = { 512, 512, 512, 512, };
+	cfg.ppo.critic.layerSizes = { 512, 512, 512, 512, };
 
 	auto optim = ModelOptimType::ADAM;
 	cfg.ppo.policy.optimType = optim;
