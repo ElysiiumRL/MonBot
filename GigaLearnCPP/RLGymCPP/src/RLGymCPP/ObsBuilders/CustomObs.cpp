@@ -1,242 +1,391 @@
 #include "CustomObs.h"
 #include <RLGymCPP/Gamestates/StateUtil.h>
+#include <RLGymCPP/CommonValues.h>
+#include <../RLGymCPP/RocketSim/src/Sim/BallPredTracker/BallPredTracker.h>
+
+#include <algorithm>
+#include <cmath>
 
 using namespace RLGC;
 
-void CustomObs::AddBallFeatures(FList& obs, const PhysState& ball, const GameState& state) {
-    // Position et vélocité de base
-    obs += ball.pos * POS_COEF;
-    obs += ball.vel * VEL_COEF;
-    obs += ball.angVel * ANG_VEL_COEF;
+static inline float Clamp01(float v) { return v < 0 ? 0.f : (v > 1.f ? 1.f : v); }
 
-    // Distances aux buts
-    Vec blueGoal(0, -5120, 0);
-    Vec orangeGoal(0, 5120, 0);
-    obs += Distance(ball.pos, blueGoal) * POS_COEF;
-    obs += Distance(ball.pos, orangeGoal) * POS_COEF;
+static void AddGoalFeatures(FList& obs, const PhysState& self, const PhysState& ball) {
+    const Vec oppGoal(0, CommonValues::BACK_WALL_Y, 0);
+    const Vec ownGoal(0, -CommonValues::BACK_WALL_Y, 0);
 
-    // Hauteur normalisée et vitesse scalaire
-    obs += ball.pos.z * HEIGHT_COEF;
-    float speed = ball.vel.Length();
-    obs += speed * VEL_COEF;
+    // Car -> Opp Goal
+    Vec carToOpp = oppGoal - self.pos;
+    float carToOppDist = carToOpp.Length();
+    obs += carToOppDist * CustomObs::POS_COEF;
+    obs += self.rotMat.Dot(carToOpp).Normalized();
 
-    // Direction du mouvement (normalisée)
-    Vec velDir = speed > 1.f ? ball.vel / speed : Vec(0, 0, 0);
-    obs += velDir;
+    // Ball -> Opp Goal (monde)
+    Vec ballToOpp = oppGoal - ball.pos;
+    float ballToOppDist = ballToOpp.Length();
+    obs += ballToOppDist * CustomObs::POS_COEF;
+    obs += ballToOpp.Normalized();
 
-    // Prédictions de scoring (si Arena disponible)
-    // Note: Ces méthodes nécessitent l'accès à l'Arena
-    // obs += probGoalBlue; // Arena::IsBallProbablyGoingIn
-    // obs += probGoalOrange;
-    // obs += timeToGround;
+    // Car -> Own Goal
+    Vec carToOwn = ownGoal - self.pos;
+    float carToOwnDist = carToOwn.Length();
+    obs += carToOwnDist * CustomObs::POS_COEF;
+    obs += self.rotMat.Dot(carToOwn).Normalized();
 }
 
-void CustomObs::AddPlayerToObs(
-    FList& obs,
-    const Player& player,
-    bool inv,
-    const PhysState& ball,
-    const PhysState& agentPhys
-) {
-    auto phys = InvertPhys(player, inv);
+static void AddFieldProximity(FList& obs, const PhysState& self) {
+    // Distances aux murs/plafond (normalisées)
+    float dx = CommonValues::SIDE_WALL_X - std::abs(self.pos.x);
+    float dy = CommonValues::BACK_WALL_Y - std::abs(self.pos.y);
+    float dz = CommonValues::CEILING_Z - self.pos.z;
 
-    // === PHYSIQUE DE BASE (18) ===
-    obs += phys.pos * POS_COEF;                        // 3
-    obs += phys.rotMat.forward;                        // 3
-    obs += phys.rotMat.up;                             // 3
-    obs += phys.rotMat.right;                          // 3 (NOUVEAU)
-    obs += phys.vel * CAR_VEL_COEF;                    // 3
-    obs += phys.angVel * CAR_ANG_VEL_COEF;             // 3
+    obs += dx * CustomObs::POS_COEF;
+    obs += dy * CustomObs::POS_COEF;
+    obs += dz * CustomObs::POS_COEF;
 
-    // === VÉLOCITÉ ANGULAIRE LOCALE (3) ===
-    obs += phys.rotMat.Dot(phys.angVel) * CAR_ANG_VEL_COEF;
+    // Min distance mur/plafond
+    float dmin = std::min({ dx, dy, dz });
+    obs += dmin * CustomObs::POS_COEF;
 
-    // === POSITION/VÉL BALLE RELATIVE (7) ===
-    Vec relBallPos = phys.rotMat.Dot(ball.pos - phys.pos);
-    Vec relBallVel = phys.rotMat.Dot(ball.vel - phys.vel);
-    obs += relBallPos * POS_COEF;                      // 3
-    obs += relBallVel * VEL_COEF;                      // 3
-    obs += Distance(phys.pos, ball.pos) * POS_COEF;    // 1 - Distance balle
-
-    // === ÉTATS BOOLÉENS (11) ===
-    obs += player.boost * BOOST_COEF;                  // 1
-    obs += (float)player.isOnGround;                   // 1
-    obs += (float)player.HasFlipOrJump();              // 1
-    obs += (float)player.isDemoed;                     // 1
-    obs += (float)player.hasJumped;                    // 1
-    obs += (float)player.hasDoubleJumped;              // 1
-    obs += (float)player.isFlipping;                   // 1
-    obs += (float)player.isSupersonic;                 // 1
-
-    // Roues en contact (4)
-    for (int i = 0; i < 4; i++)
-        obs += (float)player.wheelsWithContact[i];
-
-    // === TIMERS NORMALISÉS (4) ===
-    obs += player.flipTime * (1.f / 0.65f);            // FLIP_TORQUE_TIME
-    obs += player.jumpTime * (1.f / 0.2f);             // JUMP_MAX_TIME
-    obs += player.airTime * TIME_COEF;                 // 1
-    obs += player.supersonicTime * TIME_COEF;          // 1
-    obs += player.handbrakeVal;                        // 1 (déjà [0,1])
-
-    // === BALLHITINFO (8) ===
-    obs += (float)player.ballHitInfo.isValid;                              // 1
-    obs += player.ballHitInfo.relativePosOnBall * (1.f / 200.f);          // 3
-    obs += player.ballHitInfo.extraHitVel * CAR_VEL_COEF;                 // 3
-
-    // Ticks depuis dernière touche (normalisé sur 2 secondes à 120Hz)
-    float ticksSinceHit = player.ballHitInfo.isValid ?
-        (float)(player.updateCounter - player.ballHitInfo.tickCountWhenHit) : 240.f;
-    obs += ticksSinceHit / 240.f;                                          // 1
+    // Tilt du chassis (1=verticalité parfaite, proche 0 = sur mur/plafond)
+    obs += self.rotMat.up.z;
 }
 
-void CustomObs::AddTacticalFeatures(
+static void AddCarBallExtras(FList& obs, const PhysState& self, const PhysState& ball, const Player& player) {
+    Vec toBall = ball.pos - self.pos;
+    float distBall = toBall.Length();
+    obs += distBall * CustomObs::POS_COEF;
+
+    Vec dirBallLocal = self.rotMat.Dot(toBall).Normalized();
+    obs += dirBallLocal;
+
+    float fwdAlign = self.rotMat.forward.Dot(toBall.Normalized());
+    obs += fwdAlign;
+
+    float relSpeedToBall = std::max(0.f, self.vel.Dot(toBall.Normalized()));
+    obs += relSpeedToBall / CommonValues::CAR_MAX_SPEED;
+
+    obs += (ball.pos.z - self.pos.z) * CustomObs::POS_COEF;
+
+    bool isKickoff = (std::abs(ball.pos.x) < 20.f) &&
+        (std::abs(ball.pos.y) < 20.f) &&
+        (ball.vel.Length() < 50.f);
+    obs += isKickoff ? 1.f : 0.f;
+
+    obs += player.isSupersonic ? 1.f : 0.f;
+}
+
+static void AddNearestBoostFeatures(
     FList& obs,
-    const Player& agent,
-    const GameState& state,
+    const PhysState& self,
+    const std::vector<bool>& pads,
+    const std::vector<float>& padTimers,
     bool inv
 ) {
-    auto agentPhys = InvertPhys(agent, inv);
-    auto ball = InvertPhys(state.ball, inv);
+    int nearestIdx = -1;
+    float bestDist2 = 1e20f;
 
-    // Distance au plus proche adversaire
-    float closestOppDist = 99999.f;
-    for (auto& player : state.players) {
-        if (player.team != agent.team && !player.isDemoed) {
-            auto oppPhys = InvertPhys(player, inv);
-            float dist = Distance(agentPhys.pos, oppPhys.pos);
-            closestOppDist = RS_MIN(closestOppDist, dist);
+    for (int i = 0; i < CommonValues::BOOST_LOCATIONS_AMOUNT; i++) {
+        int mapIdx = inv ? (CommonValues::BOOST_LOCATIONS_AMOUNT - i - 1) : i;
+        const Vec& padPos = CommonValues::BOOST_LOCATIONS[mapIdx];
+
+        Vec d = padPos - self.pos;
+        float d2 = d.Dot(d);
+        if (d2 < bestDist2) {
+            bestDist2 = d2;
+            nearestIdx = i;
         }
     }
-    obs += closestOppDist * POS_COEF;
 
-    // Angle défensif (angle entre agent, balle et son but)
-    Vec ownGoal = Vec(0, -5120, 0);
-    Vec toBall = ball.pos - agentPhys.pos;
-    Vec toGoal = ownGoal - agentPhys.pos;
-    float defensiveAngle = AngleBetween(toBall, toGoal);
-    obs += defensiveAngle / M_PI;
+    if (nearestIdx >= 0) {
+        float dist = std::sqrt(bestDist2);
+        obs += dist * CustomObs::POS_COEF;
 
-    // Avantage positionnel (distance balle-agent vs distance balle-adversaire le plus proche)
-    float agentToBall = Distance(agentPhys.pos, ball.pos);
-    float oppToBall = 99999.f;
-    for (auto& player : state.players) {
-        if (player.team != agent.team && !player.isDemoed) {
-            auto oppPhys = InvertPhys(player, inv);
-            oppToBall = RS_MIN(oppToBall, Distance(oppPhys.pos, ball.pos));
+        if (pads[nearestIdx]) {
+            obs += 1.f;
+        }
+        else {
+            float t = padTimers[nearestIdx];
+            obs += 1.f / (1.f + t);
         }
     }
-    float advantage = (oppToBall - agentToBall) / 10000.f;
-    obs += RS_CLAMP(advantage, -1.f, 1.f);
-
-    // Temps d'interception estimé (simplifié)
-    float speed = agentPhys.vel.Length();
-    float timeToIntercept = (speed > 100.f) ? (agentToBall / speed) : 5.f;
-    obs += RS_MIN(timeToIntercept, 5.f) * TIME_COEF;
+    else {
+        obs += 0.f;
+        obs += 0.f;
+    }
 }
 
-void CustomObs::AddBallPredictions(FList& obs, const GameState& state, bool inv) {
-    // Note: Nécessite BallPredTracker dans GameState
-    // Pour l'instant, on simule avec des prédictions simples
+static void AddBallLineShots(FList& obs, const PhysState& ball) {
+    // Heuristique simple: la balle va-t-elle vers un but sur trajectoire linéaire ?
+    auto on_target = [](const PhysState& b, float goalY) {
+        float vy = b.vel.y;
+        if (std::abs(vy) < 1e-3f) return 0.f;
+        float t = (goalY - b.pos.y) / vy;
+        if (t <= 0) return 0.f;
+        Vec hit = b.pos + b.vel * t;
+        bool betweenPosts = std::abs(hit.x) <= CommonValues::GOAL_WIDTH_FROM_CENTER && hit.z > 0 && hit.z <= CommonValues::GOAL_HEIGHT;
+        return betweenPosts ? 1.f : 0.f;
+        };
 
-    auto ball = InvertPhys(state.ball, inv);
-    float dt = 1.f / 120.f; // Tick time à 120Hz
+    float shotOpp = on_target(ball, CommonValues::BACK_WALL_Y);
+    float shotOwn = on_target(ball, -CommonValues::BACK_WALL_Y);
 
-    // Prédictions à 0.25s, 0.5s, 1s (pas de 5, 10, 20 ticks)
-    std::vector<int> predSteps = { 5, 10, 20 };
+    obs += shotOpp;
+    obs += shotOwn;
+}
 
-    for (int step : predSteps) {
-        float time = step * dt;
+// ===================== CustomObs impl =====================
 
-        // Prédiction linéaire simple (à améliorer avec BallPredTracker)
-        Vec predPos = ball.pos + ball.vel * time;
-        predPos.z += 0.5f * -650.f * time * time; // Gravité
+CustomObs::~CustomObs() {
+    for (auto& kv : predTrackers) delete kv.second;
+    predTrackers.clear();
+}
 
-        obs += predPos * POS_COEF; // 3 floats par prédiction
+void CustomObs::EnsurePredTracker(RocketSim::Arena* arena) {
+    if (!arena) return;
+    auto it = predTrackers.find(arena);
+    size_t neededTicks = ComputePredTicks(arena);
+
+    if (it == predTrackers.end()) {
+        predTrackers[arena] = new RocketSim::BallPredTracker(arena, neededTicks);
     }
+    else {
+        auto* tracker = it->second;
+        if (tracker->numPredTicks < neededTicks) {
+            delete tracker;
+            predTrackers[arena] = new RocketSim::BallPredTracker(arena, neededTicks);
+        }
+    }
+}
+
+size_t CustomObs::ComputePredTicks(RocketSim::Arena* arena) const {
+    if (!arena || predHorizons.empty()) return 0;
+    float maxH = 0.f;
+    for (float t : predHorizons) maxH = std::max(maxH, t);
+    return static_cast<size_t>(std::ceil(maxH / arena->tickTime)) + 3; // marge
+}
+
+void CustomObs::AddPlayerToObs(FList& obs, const Player& player, bool inv, const PhysState& ball) {
+    auto phys = InvertPhys(player, inv);
+
+    // Etat absolu (monde inversé)
+    obs += phys.pos * POS_COEF;
+    obs += phys.rotMat.forward;
+    obs += phys.rotMat.up;
+    obs += phys.vel * VEL_COEF;
+    obs += phys.angVel * ANG_VEL_COEF;
+    obs += phys.rotMat.Dot(phys.angVel) * ANG_VEL_COEF;
+
+    // Balle locale à ce joueur
+    obs += phys.rotMat.Dot(ball.pos - phys.pos) * POS_COEF;
+    obs += phys.rotMat.Dot(ball.vel - phys.vel) * VEL_COEF;
+
+    // Statuts
+    obs += player.boost / 100.f;
+    obs += player.isOnGround ? 1.f : 0.f;
+    obs += player.HasFlipOrJump() ? 1.f : 0.f;
+    obs += player.isDemoed ? 1.f : 0.f;
+    obs += player.hasJumped ? 1.f : 0.f;
+    obs += player.isSupersonic ? 1.f : 0.f;
+    obs += player.hasDoubleJumped ? 1.f : 0.f;
 }
 
 FList CustomObs::BuildObs(const Player& player, const GameState& state) {
     FList obs = {};
 
     bool inv = player.team == Team::ORANGE;
+
     auto ball = InvertPhys(state.ball, inv);
-    auto agentPhys = InvertPhys(player, inv);
-    auto& pads = state.GetBoostPads(inv);
-    auto& padTimers = state.GetBoostPadTimers(inv);
+    auto phys = InvertPhys(player, inv);
+    const auto& pads = state.GetBoostPads(inv);
+    const auto& padTimers = state.GetBoostPadTimers(inv);
 
-    // === 1. FEATURES BALLE (20) ===
-    AddBallFeatures(obs, ball, state);
+    // Balle (monde inversé)
+    obs += ball.pos * POS_COEF;
+    obs += ball.vel * VEL_COEF;
+    obs += ball.angVel * ANG_VEL_COEF;
 
-    // === 2. ACTIONS PRÉCÉDENTES (8) ===
+    // Heuristiques tir actuelles
+    AddBallLineShots(obs, ball);
+
+    // Dernière action
     for (int i = 0; i < player.prevAction.ELEM_AMOUNT; i++)
         obs += player.prevAction[i];
 
-    // === 3. BOOST PADS (34) ===
+    // Boost pads global (blend via timers)
     for (int i = 0; i < CommonValues::BOOST_LOCATIONS_AMOUNT; i++) {
-        if (pads[i]) {
-            obs += 1.f;
-        }
-        else {
-            obs += 1.f / (1.f + padTimers[i]); // Approche 1 quand disponible
-        }
+        if (pads[i]) obs += 1.f;
+        else         obs += 1.f / (1.f + padTimers[i]);
     }
 
-    // === 4. FEATURES AGENT (58) ===
+    // Self + extras
     FList selfObs = {};
-    AddPlayerToObs(selfObs, player, inv, ball, agentPhys);
+    AddPlayerToObs(selfObs, player, inv, ball);
+    AddCarBallExtras(selfObs, phys, ball, player);
+    AddGoalFeatures(selfObs, phys, ball);
+    AddNearestBoostFeatures(selfObs, phys, pads, padTimers, inv);
+    AddFieldProximity(selfObs, phys);
+
+    // ========== Ball prediction features ==========
+    RocketSim::BallPredTracker* tracker = nullptr;
+    float minDist = 1e20f, minTime = 0.f;
+
+    // Landing
+    float landT = 0.f; Vec landPos = Vec(0, 0, 0); bool foundLand = false;
+
+    // Avantage proximité vs adversaire
+    int closerCount = 0; int horizonCount = 0;
+
+    if (state.lastArena) {
+        EnsurePredTracker(state.lastArena);
+        tracker = predTrackers[state.lastArena];
+        if (tracker) {
+            tracker->UpdatePredFromArena(state.lastArena);
+
+            // Opposant unique (1v1)
+            const Player* opp = nullptr;
+            for (auto& p : state.players) {
+                if (p.carId != player.carId && p.team != player.team) { opp = &p; break; }
+            }
+            PhysState oppPhysInv = opp ? InvertPhys(*opp, inv) : PhysState{};
+
+            for (float t : predHorizons) {
+                auto pb = tracker->GetBallStateForTime(t);
+                PhysState pball = InvertPhys(pb, inv);
+
+                // Local à l’agent
+                Vec relPos = phys.rotMat.Dot(pball.pos - phys.pos);
+                Vec relVel = phys.rotMat.Dot(pball.vel - phys.vel);
+                selfObs += relPos * POS_COEF;
+                selfObs += relVel * VEL_COEF;
+
+                // Distance au but adverse
+                Vec oppGoal(0, CommonValues::BACK_WALL_Y, 0);
+                float distGoal = (oppGoal - pball.pos).Length();
+                selfObs += distGoal * POS_COEF;
+
+                // Shot on target à l’horizon
+                float vy = pball.vel.y;
+                float shotOpp = 0.f;
+                if (std::abs(vy) > 1e-3f) {
+                    float tt = (CommonValues::BACK_WALL_Y - pball.pos.y) / vy;
+                    if (tt > 0) {
+                        Vec hit = pball.pos + pball.vel * tt;
+                        bool ok = std::abs(hit.x) <= CommonValues::GOAL_WIDTH_FROM_CENTER && hit.z > 0 && hit.z <= CommonValues::GOAL_HEIGHT;
+                        shotOpp = ok ? 1.f : 0.f;
+                    }
+                }
+                selfObs += shotOpp;
+
+                // Min distance approx
+                float d = (pball.pos - phys.pos).Length();
+                if (d < minDist) { minDist = d; minTime = t; }
+
+                // Avantage proximité vs adversaire
+                if (opp) {
+                    float dAgent = (pball.pos - phys.pos).Length();
+                    float dOpp = (pball.pos - oppPhysInv.pos).Length();
+                    closerCount += (dAgent <= dOpp) ? 1 : 0;
+                }
+                horizonCount++;
+            }
+
+            // Landing: première prédiction au sol
+            for (size_t i = 1; i < tracker->predData.size(); i++) {
+                const auto& bsCur = tracker->predData[i];
+                if (bsCur.pos.z <= CommonValues::BALL_RADIUS + 5 && bsCur.vel.z <= 0) {
+                    float t = static_cast<float>(i) * state.lastArena->tickTime;
+                    auto bsInv = InvertPhys(bsCur, inv);
+                    landT = t; landPos = bsInv.pos; foundLand = true; break;
+                }
+            }
+        }
+    }
+    else {
+        // Pas d'arène: on pad avec des zéros (8 scalaires par horizon + 6 finaux)
+        const int scalarsPerHorizon = 8; // relPos(3) + relVel(3) + distGoal(1) + shotOpp(1)
+        for (size_t i = 0; i < predHorizons.size() * scalarsPerHorizon; i++) selfObs += 0.f;
+        // minDist, minTime, landX, landY, landT, proxAdv
+        for (int i = 0; i < 6; i++) selfObs += 0.f;
+    }
+
+    // Ajout minDist/minTime
+    selfObs += (minDist < 1e19f ? (minDist * POS_COEF) : 0.f);
+    selfObs += Clamp01(minTime / 2.0f);
+
+    // Ajout landing (x,y,t)
+    if (foundLand) {
+        selfObs += landPos.x * POS_COEF;
+        selfObs += landPos.y * POS_COEF;
+        selfObs += Clamp01(landT / 2.0f);
+    }
+    else {
+        selfObs += 0.f; selfObs += 0.f; selfObs += 0.f;
+    }
+
+    // Avantage proximité: fraction d’horizons
+    float proxAdv = (horizonCount > 0) ? (static_cast<float>(closerCount) / horizonCount) : 0.f;
+    selfObs += proxAdv;
+
     obs += selfObs;
-    int playerObsSize = selfObs.size() + 9; // +9 pour position/vel relative
 
-    // === 5. FEATURES TACTIQUES (4) ===
-    if (enableTacticalFeatures) {
-        AddTacticalFeatures(obs, player, state, inv);
-    }
-
-    // === 6. PRÉDICTIONS BALLE (9) ===
-    if (enableBallPrediction) {
-        AddBallPredictions(obs, state, inv);
-    }
-
-    // === 7. COÉQUIPIERS ET ADVERSAIRES ===
+    // Autres joueurs (1 adversaire max)
+    int playerObsSize = selfObs.size() + 9; // cohérence legacy
     std::vector<FList> teammates = {}, opponents = {};
 
     for (auto& otherPlayer : state.players) {
-        if (otherPlayer.carId == player.carId)
-            continue;
+        if (otherPlayer.carId == player.carId) continue;
 
         auto otherPhys = InvertPhys(otherPlayer, inv);
 
-        // Position/vélocité relative dans le frame de l'agent
-        Vec relPos = agentPhys.rotMat.Dot(otherPhys.pos - agentPhys.pos);
-        Vec relVel = agentPhys.rotMat.Dot(otherPhys.vel - agentPhys.vel);
-        Vec otherAngVel = agentPhys.rotMat.Dot(otherPhys.angVel);
+        Vec relPos = phys.rotMat.Dot(otherPhys.pos - phys.pos);
+        Vec relVel = phys.rotMat.Dot(otherPhys.vel - phys.vel);
+        Vec otherAngVelLocal = phys.rotMat.Dot(otherPhys.angVel);
 
         FList playerObs;
-        playerObs += relPos * POS_COEF;              // 3
-        playerObs += relVel * CAR_VEL_COEF;          // 3
-        playerObs += otherAngVel * CAR_ANG_VEL_COEF; // 3
+        playerObs += relPos * POS_COEF;
+        playerObs += relVel * VEL_COEF;
+        playerObs += otherAngVelLocal * ANG_VEL_COEF;
 
-        AddPlayerToObs(playerObs, otherPlayer, inv, ball, agentPhys);
+        // Etat détaillé
+        AddPlayerToObs(playerObs, otherPlayer, inv, ball);
+
+        // Orientation adversaire dans repère de l’agent
+        Vec oppFwdLocal = phys.rotMat.Dot(otherPhys.rotMat.forward);
+        Vec oppUpLocal = phys.rotMat.Dot(otherPhys.rotMat.up);
+        playerObs += oppFwdLocal;
+        playerObs += oppUpLocal;
+
+        // Alignement adversaire -> balle
+        Vec oppToBall = (ball.pos - otherPhys.pos);
+        float oppAlignToBall = otherPhys.rotMat.forward.Dot(oppToBall.Normalized());
+        playerObs += oppAlignToBall;
+
+        // Boost adversaire
+        playerObs += otherPlayer.boost / 100.f;
+
         (otherPlayer.team == player.team ? teammates : opponents).push_back(playerObs);
     }
 
-    // Padding pour taille fixe
     if (teammates.size() > maxPlayers - 1)
-        RG_ERR_CLOSE("UltraCustomObs: Trop de coéquipiers, max = " << (maxPlayers - 1));
+        RG_ERR_CLOSE("CustomObs: Too many teammates for Obs, maximum is " << (maxPlayers - 1));
     if (opponents.size() > maxPlayers)
-        RG_ERR_CLOSE("UltraCustomObs: Trop d'adversaires, max = " << maxPlayers);
+        RG_ERR_CLOSE("CustomObs: Too many opponents for Obs, maximum is " << maxPlayers);
 
-    while (teammates.size() < maxPlayers - 1)
-        teammates.push_back(FList(playerObsSize, 0.f));
-    while (opponents.size() < maxPlayers)
-        opponents.push_back(FList(playerObsSize, 0.f));
+    // Padding (1v1 -> 0 teammate, 1 opponent)
+    for (int i = 0; i < 2; i++) {
+        auto& playerList = i ? teammates : opponents;
+        int targetCount = i ? maxPlayers - 1 : maxPlayers;
+        while (playerList.size() < targetCount) {
+            FList pad = FList(playerObsSize);
+            playerList.push_back(pad);
+        }
+    }
 
-    // Shuffle pour invariance de position
+    // Shuffle (inutile en 1v1, conservé pour compat)
     std::shuffle(teammates.begin(), teammates.end(), ::Math::GetRandEngine());
     std::shuffle(opponents.begin(), opponents.end(), ::Math::GetRandEngine());
 
-    // Ajout final
     for (auto& teammate : teammates) obs += teammate;
     for (auto& opponent : opponents) obs += opponent;
 
