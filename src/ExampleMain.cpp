@@ -4,9 +4,9 @@
 #include <RLGymCPP/Rewards/ZeroSumReward.h>
 #include <RLGymCPP/TerminalConditions/NoTouchCondition.h>
 #include <RLGymCPP/TerminalConditions/GoalScoreCondition.h>
-#include <RLGymCPP/OBSBuilders/DefaultObs.h>
-#include <RLGymCPP/OBSBuilders/AdvancedObs.h>
-#include <RLGymCPP/OBSBuilders/CustomOBS.h>
+#include <RLGymCPP/ObsBuilders/DefaultObs.h>
+#include <RLGymCPP/ObsBuilders/AdvancedObs.h>
+#include <RLGymCPP/ObsBuilders/CustomObs.h>
 #include <RLGymCPP/StateSetters/KickoffState.h>
 #include <RLGymCPP/StateSetters/RandomState.h>
 #include <RLGymCPP/StateSetters/CombinedState.h>
@@ -138,7 +138,7 @@ void StepCallback(Learner* learner, const std::vector<GameState>& states, Report
 int main(int argc, char* argv[]) {
 	// Initialize RocketSim with collision meshes
 	// Change this path to point to your meshes!
-	RocketSim::Init("C:\\Users\\Administrator\\Desktop\\bot\\GigaLearnCPP-Leak\\collision_meshes");
+	RocketSim::Init("/workspace/Elybot/collision_meshes");
 
 	// Make configuration for the learner
 	LearnerConfig cfg = {};
@@ -176,9 +176,9 @@ int main(int argc, char* argv[]) {
 	cfg.ppo.policyLR = 1e-4;
 	cfg.ppo.criticLR = 1e-4;
 
-	cfg.ppo.sharedHead.layerSizes = { 512, 512, 512, };
-	cfg.ppo.policy.layerSizes = { 512, 512, 512, 512, };
-	cfg.ppo.critic.layerSizes = { 512, 512, 512, 512, };
+	cfg.ppo.sharedHead.layerSizes = { 786, 786, 512, };
+	cfg.ppo.policy.layerSizes = { 786, 786, 512, 512, };
+	cfg.ppo.critic.layerSizes = { 786, 786, 512, 512, };
 
 	auto optim = ModelOptimType::ADAM;
 	cfg.ppo.policy.optimType = optim;
