@@ -20,17 +20,16 @@ EnvCreateResult EnvCreateFunc(int index) {
 	std::vector<WeightedReward> rewards = {
 
 		// Movement
-		{ new AirReward(), 0.1f },
-		{ new EnergyReward(), 0.005f },
-		{ new WavedashReward(), 7.f },
+		{ new AirReward(), 0.15f },
+		{ new EnergyReward(), 0.02f },
 		{ new LowSpeedPunish(), 0.5f },
 
 		// Player-ball
 		{ new FaceBallReward(), 0.2f },
 		{ new VelocityPlayerToBallReward(), 3.f },
-		{ new ZeroSumReward(new StrongTouchReward(20, 110), 1, 0.0f), 45 },
+		{ new ZeroSumReward(new StrongTouchReward(20, 110), 1, 0.0f), 50 },
 		{ new ZeroSumReward(new TouchHeightReward(), 1), 30 },
-		{ new ZeroSumReward(new AerialReward2(), 1, 1), 50.f },
+		{ new ZeroSumReward(new AerialReward2(), 1, 1), 60.f },
 		{ new ZeroSumReward(new PossessionReward(), 1, 1), 0.3f },
 
 
@@ -41,22 +40,20 @@ EnvCreateResult EnvCreateFunc(int index) {
 		// Boost
 		{ new ZeroSumReward(new PickupBoostReward(), 0.3f, 1), 40.f },
 		{ new ZeroSumReward(new SaveBoostReward(), 0, 0.25f), 0.2f },
-
+		
 		// Game Sense
 		{ new EngagedDistanceReward(), 20.f },
-		{ new TeamSpacingReward(), 10.f },
 		{ new AFKTrollPenalty(), 50.f },
 
 		// Game events
 		{ new ZeroSumReward(new BumpReward(), 0.5f), 200 },
 		{ new ZeroSumReward(new DemoReward(), 0.5f), 300 },
 		{ new ZeroSumReward(new ClosestKickoffReward(), 1, 1), 1.5f },
-		{ new ZeroSumReward(new AssistReward(), 1, 1), 180 },
 		{ new ZeroSumReward(new GoalSpeedReward(), 1, 0), 125 },
 		{ new GoalReward(), 300.f },
 		{ new GoalDistancePunish(), 250 },
 		{ new ZeroSumReward(new GoalHeightReward(), 1, 0), 125 },
-		{ new ZeroSumReward(new ShotPassReward(), 0, 1.f), 125 },
+
 	};
 
 	std::vector<TerminalCondition*> terminalConditions = {
@@ -149,13 +146,13 @@ int main(int argc, char* argv[]) {
 	cfg.actionDelay = cfg.tickSkip - 1; // Normal value in other RLGym frameworks
 
 	// Play around with this to see what the optimal is for your machine, more games will consume more RAM
-	cfg.numGames = 500; //256 default
+	cfg.numGames = 300; //256 default
 
 	// Leave this empty to use a random seed each run
 	// The random seed can have a strong effect on the outcome of a run
 	cfg.randomSeed = 123;
 
-	int tsPerItr = 100'000;
+	int tsPerItr = 50'000;
 	cfg.ppo.tsPerItr = tsPerItr;
 	cfg.ppo.batchSize = tsPerItr;
 	cfg.ppo.miniBatchSize = 50'000; // Lower this if too much VRAM is being allocated
@@ -173,12 +170,12 @@ int main(int argc, char* argv[]) {
 	cfg.ppo.gaeGamma = 0.991;
 
 	// Good learning rate to start
-	cfg.ppo.policyLR = 1e-4;
-	cfg.ppo.criticLR = 1e-4;
+	cfg.ppo.policyLR = 1.5e-4;
+	cfg.ppo.criticLR = 1.5e-4;
 
-	cfg.ppo.sharedHead.layerSizes = { 786, 786, 512, };
-	cfg.ppo.policy.layerSizes = { 786, 786, 512, 512, };
-	cfg.ppo.critic.layerSizes = { 786, 786, 512, 512, };
+	cfg.ppo.sharedHead.layerSizes = {1024, 1024, 1024, 1024,};
+        cfg.ppo.policy.layerSizes = {1024, 1024, 1024, 1024,};
+        cfg.ppo.critic.layerSizes = {1024, 1024, 1024, 1024,};
 
 	auto optim = ModelOptimType::ADAM;
 	cfg.ppo.policy.optimType = optim;
