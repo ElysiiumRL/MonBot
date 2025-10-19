@@ -64,7 +64,7 @@ namespace GGL {
 		int64_t tsPerVersion = 25'000'000;
 		int maxOldVersions = 32;
 
-		bool trainAgainstOldVersions = false;
+		bool trainAgainstOldVersions = true;
 		float trainAgainstOldChance = 0.15f; // Chance (from 0 - 1) that an iteration will train against an old version
 
 		SkillTrackerConfig skillTracker = {};
