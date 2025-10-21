@@ -12,6 +12,10 @@
 #include <RLGymCPP/StateSetters/CombinedState.h>
 #include <RLGymCPP/ActionParsers/DefaultAction.h>
 
+#include <ATen/Context.h>
+#include <ATen/autocast_mode.h>
+#include <torch/cuda.h>
+
 using namespace GGL; // GigaLearn
 using namespace RLGC; // RLGymCPP
 
@@ -133,6 +137,13 @@ void StepCallback(Learner* learner, const std::vector<GameState>& states, Report
 
 int main(int argc, char* argv[]) {
 	RocketSim::Init("/workspace/bot/collision_meshes");
+
+at::globalContext().setAllowTF32CuBLAS(true);
+at::globalContext().setAllowTF32CuDNN(true);
+at::globalContext().setBenchmarkCuDNN(true);
+at::autocast::set_enabled(true);
+
+torch::cuda::empty_cache();
 
 	LearnerConfig cfg = {};
 	cfg.deviceType = LearnerDeviceType::GPU_CUDA;
