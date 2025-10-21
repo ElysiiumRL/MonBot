@@ -25,12 +25,11 @@ EnvCreateResult EnvCreateFunc(int index) {
 
 			// Movement
 		{ new AirReward(), 0.1f },
-		{ new EnergyReward(), 0.005f },
-                { new RecoveryReward(), 5.f }, 
+		{ new EnergyReward(), 0.005f }, 
 
 		// Player-ball
 		{ new VelocityPlayerToBallReward(), 1.f },
-                { new ZeroSumReward(new TouchAccelReward(), 1), 15 },
+        { new ZeroSumReward(new TouchAccelReward(), 1), 15 },
 		{ new ZeroSumReward(new StrongTouchReward(20, 110), 1, 0.0f), 2 },
 		{ new ZeroSumReward(new TouchHeightReward(), 1), 2 },
 		{ new ZeroSumReward(new AerialReward2(), 1, 1), 2.f },
@@ -148,7 +147,7 @@ torch::cuda::empty_cache();
 	LearnerConfig cfg = {};
 	cfg.deviceType = LearnerDeviceType::GPU_CUDA;
 
-	cfg.tickSkip = 8;
+	cfg.tickSkip = 4;
 	cfg.actionDelay = cfg.tickSkip - 1; // Normal value in other RLGym frameworks
 
 	// Play around with this to see what the optimal is for your machine, more games will consume more RAM
@@ -158,7 +157,7 @@ torch::cuda::empty_cache();
 	// The random seed can have a strong effect on the outcome of a run
 	cfg.randomSeed = 123;
 
-	int tsPerItr = 100'000;
+	int tsPerItr = 50'000;
 	cfg.ppo.tsPerItr = tsPerItr;
 	cfg.ppo.batchSize = tsPerItr;
 	cfg.ppo.miniBatchSize = 50'000; // Lower this if too much VRAM is being allocated
@@ -173,17 +172,17 @@ torch::cuda::empty_cache();
 
 	// Rate of reward decay
 	// Starting low tends to work out
-	cfg.ppo.gaeGamma = 0.99846085862697;
+	cfg.ppo.gaeGamma = 0.995;
 
 	// Good learning rate to start
-	cfg.ppo.policyLR = 1e-4;
-	cfg.ppo.criticLR = 1e-4;
+	cfg.ppo.policyLR = 2e-4;
+	cfg.ppo.criticLR = 2e-4;
 
-	cfg.ppo.sharedHead.layerSizes = { 786, 786, 512, };
-        cfg.ppo.policy.layerSizes = { 786, 786, 512, 512, };
-        cfg.ppo.critic.layerSizes = { 786, 786, 512, 512, };
+	cfg.ppo.sharedHead.layerSizes = { 1024, 1024, 1024, 1024; };
+        cfg.ppo.policy.layerSizes = { 1024, 1024, 1024, 1024, };
+        cfg.ppo.critic.layerSizes = { 1024, 1024, 1024, 1024, };
 
-	auto optim = ModelOptimType::ADAM;
+	auto optim = ModelOptimType::ADAMW;
 	cfg.ppo.policy.optimType = optim;
 	cfg.ppo.critic.optimType = optim;
 	cfg.ppo.sharedHead.optimType = optim;
