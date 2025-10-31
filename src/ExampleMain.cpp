@@ -153,16 +153,16 @@ int main(int argc, char* argv[]) {
 	cfg.ppo.policyLR = 2e-4;
 	cfg.ppo.criticLR = 2e-4;
 
-	cfg.ppo.sharedHead.layerSizes = { 1024, 1024, 1024, 1024,};
-        cfg.ppo.policy.layerSizes = { 1024, 1024, 1024, 1024, };
-        cfg.ppo.critic.layerSizes = { 1024, 1024, 1024, 1024, };
+	cfg.ppo.sharedHead.layerSizes = { 2048, 1024, 1024,};
+        cfg.ppo.policy.layerSizes = { 2048, 1024, 1024, 1024, };
+        cfg.ppo.critic.layerSizes = { 2048, 1024, 1024, 1024, };
 
 	auto optim = ModelOptimType::ADAM;
 	cfg.ppo.policy.optimType = optim;
 	cfg.ppo.critic.optimType = optim;
 	cfg.ppo.sharedHead.optimType = optim;
 
-	auto activation = ModelActivationType::RELU;
+	auto activation = ModelActivationType::LEAKY_RELU;
 	cfg.ppo.policy.activationType = activation;
 	cfg.ppo.critic.activationType = activation;
 	cfg.ppo.sharedHead.activationType = activation;
