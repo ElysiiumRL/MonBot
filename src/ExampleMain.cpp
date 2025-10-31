@@ -18,46 +18,32 @@ using namespace RLGC; // RLGymCPP
 // Create the RLGymCPP environment for each of our games
 EnvCreateResult EnvCreateFunc(int index) {
 	std::vector<WeightedReward> rewards = {
-
-			// Movement
-		{ new AirReward(), 0.1f },
-		{ new EnergyReward(), 0.005f }, 
-
-		// Player-ball
-		{ new VelocityPlayerToBallReward(), 1.f },
-        { new ZeroSumReward(new TouchAccelReward(), 1), 15 },
-		{ new ZeroSumReward(new StrongTouchReward(20, 110), 1, 0.0f), 2 },
-		{ new ZeroSumReward(new TouchHeightReward(), 1), 2 },
-		{ new ZeroSumReward(new AerialReward2(), 1, 1), 2.f },
-		{ new ZeroSumReward(new PossessionReward(), 1, 1), 0.3f },
-
-
-		// Ball-goal
-		{ new VelocityBallToGoalReward(), 1.f },
-		{ new GoalViewReward(), 3.f },
-
-		// Boost
-		{ new ZeroSumReward(new PickupBoostReward(), 0.3f, 1), 40.f },
-		{ new ZeroSumReward(new SaveBoostReward(), 0, 0.25f), 0.2f },
+	
+		// Movement
+				{ new AirReward(), 0.15f },
+				{ new EnergyReward(), 0.005f },
 		
-		// Game Sense
-		{ new EngagedDistanceReward(), 15.f },
-
-		// Game events
-		{ new ZeroSumReward(new BumpReward(), 0.5f), 200 },
-		{ new ZeroSumReward(new DemoReward(), 0.5f), 300 },
-		{ new ZeroSumReward(new ClosestKickoffReward(), 1, 1), 1.5f },
-		{ new ZeroSumReward(new GoalSpeedReward(), 1, 0), 125 },
-		{ new GoalReward(), 500.f },
-		{ new GoalDistancePunish(), 200 },
-		{ new ZeroSumReward(new GoalHeightReward(), 1, 0), 100 },
+				// Player-ball
+				{ new FaceBallReward(), 0.2f },
+				{ new VelocityPlayerToBallReward(), 3.f },
+				{ new ZeroSumReward(new StrongTouchReward(20, 110), 1, 0.0f), 50 },
+				{ new ZeroSumReward(new TouchHeightReward(), 1), 30 },
+				{ new ZeroSumReward(new AerialReward2(), 1, 1), 60.f },
 		
-	};
-
-	std::vector<TerminalCondition*> terminalConditions = {
-		new NoTouchCondition(10),
-		new GoalScoreCondition()
-	};
+		
+				// Ball-goal
+				{ new VelocityBallToGoalReward(), 2.f },
+		
+				// Boost
+				{ new ZeroSumReward(new PickupBoostReward(), 0.3f, 1), 45.f },
+				{ new ZeroSumReward(new SaveBoostReward(), 0, 0.25f), 0.2f },
+		
+				// Game events
+				{ new ZeroSumReward(new BumpReward(), 0.5f), 80 },
+				{ new ZeroSumReward(new DemoReward(), 0.5f), 120 },
+				{ new ZeroSumReward(new GoalSpeedReward(), 1, 0), 125 },
+				{ new GoalReward(), 300.f },
+			};
 
 	bool visualizeMode = false; // enable to true to override player count and visualize 2s
 	int visualizerPlayerCount = 2;
